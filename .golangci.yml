@@ -1,0 +1,75 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+  # typecheck is disabled - it conflicts with gopkg.in/check.v1 test framework
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: go-dbscan-filter
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: var-naming
+        severity: warning
+      - name: package-comments
+        severity: warning
+      - name: comment-spacings
+        severity: warning
+      - name: range
+        severity: warning
+      - name: increment-decrement
+        severity: warning
+      - name: var-declaration
+        severity: warning
+      - name: range-val-in-closure
+        severity: warning
+      - name: unexported-return
+        severity: warning
+      - name: errorf
+        severity: warning
+      - name: empty-block
+        severity: warning
+      - name: superfluous-else
+        severity: warning
+      - name: unused-parameter
+        severity: warning
+      - name: unhandled-error
+        severity: warning
+
+issues:
+  exclude-rules:
+    # Exclude test files from most linters (they use gopkg.in/check.v1)
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosimple
+        - govet
+        - ineffassign
+        - staticcheck
+        - unused
+        - revive
+        - gofmt
+        - goimports
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-dirs:
+    - vendor
+
