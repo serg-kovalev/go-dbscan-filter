@@ -30,8 +30,8 @@ func main() {
 	)
 	flag.Parse()
 
-	// Read points from CSV
-	points, err := readPointsFromCSV(*inputFile)
+	// Read points and CSV records from file (read once, reuse for output)
+	points, csvRecords, err := readPointsAndCSV(*inputFile)
 	if err != nil {
 		log.Fatalf("Error reading CSV: %v", err)
 	}
@@ -69,13 +69,13 @@ func main() {
 	// Write filtered points to output (stdout or file)
 	if *outputFile == "" {
 		// Output to stdout as simple list of points
-		err = writeFilteredPointsToStdout(*inputFile, filteredIndices, points)
+		err = writeFilteredPointsToStdout(csvRecords, filteredIndices)
 		if err != nil {
 			log.Fatalf("Error writing to stdout: %v", err)
 		}
 	} else {
 		// Write filtered points to output CSV file
-		err = writeFilteredPointsToCSV(*inputFile, *outputFile, filteredIndices, points)
+		err = writeFilteredPointsToCSV(outputFile, csvRecords, filteredIndices)
 		if err != nil {
 			log.Fatalf("Error writing CSV: %v", err)
 		}
@@ -85,12 +85,13 @@ func main() {
 	}
 }
 
-// readPointsFromCSV reads points from a CSV file
+// readPointsAndCSV reads points and CSV records from a file in a single pass
 // Expected format: latitude,longitude (header row is optional)
-func readPointsFromCSV(filename string) (cluster.PointList, error) {
+// Returns points for clustering and raw records for output preservation
+func readPointsAndCSV(filename string) (cluster.PointList, [][]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
@@ -100,38 +101,39 @@ func readPointsFromCSV(filename string) (cluster.PointList, error) {
 
 	reader := csv.NewReader(file)
 	points := cluster.PointList{}
+	records := [][]string{}
 
-	// Read header (if present, we'll skip it if it's not numeric)
-	firstRow, err := reader.Read()
-	if err != nil {
-		return nil, err
-	}
-
-	// Try to parse first row as numbers, if it fails, it's a header
-	_, err = strconv.ParseFloat(firstRow[0], 64)
-	if err == nil {
-		// First row is data, add it
-		if len(firstRow) >= 2 {
-			lat, err1 := strconv.ParseFloat(firstRow[0], 64)
-			lon, err2 := strconv.ParseFloat(firstRow[1], 64)
-			if err1 == nil && err2 == nil {
-				// Point is [2]float64 where [0]=Lon, [1]=Lat
-				points = append(points, cluster.Point{lon, lat})
-			}
-		}
-	}
-	// If err != nil, first row is header, continue
-
-	// Read remaining rows
+	// Read all records first
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		records = append(records, record)
+	}
 
+	if len(records) == 0 {
+		return points, records, nil
+	}
+
+	// Determine if first row is header
+	hasHeader := false
+	_, err = strconv.ParseFloat(records[0][0], 64)
+	if err != nil {
+		hasHeader = true
+	}
+
+	// Parse points from records
+	startIdx := 0
+	if hasHeader {
+		startIdx = 1
+	}
+
+	for i := startIdx; i < len(records); i++ {
+		record := records[i]
 		if len(record) < 2 {
 			continue
 		}
@@ -146,7 +148,7 @@ func readPointsFromCSV(filename string) (cluster.PointList, error) {
 		points = append(points, cluster.Point{lon, lat})
 	}
 
-	return points, nil
+	return points, records, nil
 }
 
 // filterPoints filters points based on the Ruby logic:
@@ -201,42 +203,16 @@ func buildLabels(clusters []cluster.Cluster, _ []int, numPoints int) []int {
 }
 
 // writeFilteredPointsToCSV writes filtered points to output CSV
-// It reads the original CSV to preserve any additional columns
-func writeFilteredPointsToCSV(inputFile, outputFile string, filteredIndices []int, _ cluster.PointList) error {
+// Uses pre-read CSV records to preserve any additional columns
+func writeFilteredPointsToCSV(outputFile *string, csvRecords [][]string, filteredIndices []int) error {
 	// Create a set of filtered indices for quick lookup
 	filteredSet := make(map[int]bool)
 	for _, idx := range filteredIndices {
 		filteredSet[idx] = true
 	}
 
-	// Read original CSV
-	inFile, err := os.Open(inputFile)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := inFile.Close(); closeErr != nil {
-			log.Printf("Error closing input file: %v", closeErr)
-		}
-	}()
-
-	reader := csv.NewReader(inFile)
-	records := [][]string{}
-
-	// Read all records
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		records = append(records, record)
-	}
-
 	// Write filtered records to output
-	outFile, err := os.Create(outputFile)
+	outFile, err := os.Create(*outputFile)
 	if err != nil {
 		return err
 	}
@@ -251,12 +227,12 @@ func writeFilteredPointsToCSV(inputFile, outputFile string, filteredIndices []in
 
 	// Determine if first row is header
 	hasHeader := false
-	if len(records) > 0 {
-		_, err := strconv.ParseFloat(records[0][0], 64)
+	if len(csvRecords) > 0 {
+		_, err := strconv.ParseFloat(csvRecords[0][0], 64)
 		if err != nil {
 			hasHeader = true
 			// Write header
-			if err := writer.Write(records[0]); err != nil {
+			if err := writer.Write(csvRecords[0]); err != nil {
 				return err
 			}
 		}
@@ -268,10 +244,10 @@ func writeFilteredPointsToCSV(inputFile, outputFile string, filteredIndices []in
 		startIdx = 1
 	}
 
-	for i := startIdx; i < len(records); i++ {
+	for i := startIdx; i < len(csvRecords); i++ {
 		pointIdx := i - startIdx
 		if filteredSet[pointIdx] {
-			if err := writer.Write(records[i]); err != nil {
+			if err := writer.Write(csvRecords[i]); err != nil {
 				return err
 			}
 		}
@@ -282,43 +258,18 @@ func writeFilteredPointsToCSV(inputFile, outputFile string, filteredIndices []in
 
 // writeFilteredPointsToStdout writes filtered points to stdout as a simple list
 // Format: latitude,longitude (one point per line)
-func writeFilteredPointsToStdout(inputFile string, filteredIndices []int, _ cluster.PointList) error {
+// Uses pre-read CSV records to preserve order
+func writeFilteredPointsToStdout(csvRecords [][]string, filteredIndices []int) error {
 	// Create a set of filtered indices for quick lookup
 	filteredSet := make(map[int]bool)
 	for _, idx := range filteredIndices {
 		filteredSet[idx] = true
 	}
 
-	// Read original CSV to preserve order and any additional columns
-	inFile, err := os.Open(inputFile)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := inFile.Close(); closeErr != nil {
-			log.Printf("Error closing input file: %v", closeErr)
-		}
-	}()
-
-	reader := csv.NewReader(inFile)
-	records := [][]string{}
-
-	// Read all records
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		records = append(records, record)
-	}
-
 	// Determine if first row is header
 	hasHeader := false
-	if len(records) > 0 {
-		_, err := strconv.ParseFloat(records[0][0], 64)
+	if len(csvRecords) > 0 {
+		_, err := strconv.ParseFloat(csvRecords[0][0], 64)
 		if err != nil {
 			hasHeader = true
 		}
@@ -330,12 +281,12 @@ func writeFilteredPointsToStdout(inputFile string, filteredIndices []int, _ clus
 		startIdx = 1
 	}
 
-	for i := startIdx; i < len(records); i++ {
+	for i := startIdx; i < len(csvRecords); i++ {
 		pointIdx := i - startIdx
 		if filteredSet[pointIdx] {
 			// Output as: latitude,longitude
-			if len(records[i]) >= 2 {
-				fmt.Printf("%s,%s\n", records[i][0], records[i][1])
+			if len(csvRecords[i]) >= 2 {
+				fmt.Printf("%s,%s\n", csvRecords[i][0], csvRecords[i][1])
 			}
 		}
 	}

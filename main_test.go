@@ -26,7 +26,7 @@ func TestMainProgram(t *testing.T) {
 	defer os.Remove("test_points.csv")
 
 	// Read points
-	points, err := readPointsFromCSV("test_points.csv")
+	points, _, err := readPointsAndCSV("test_points.csv")
 	if err != nil {
 		t.Fatalf("Failed to read CSV: %v", err)
 	}
@@ -99,33 +99,33 @@ func TestMainProgram(t *testing.T) {
 func TestFilterPointsLogic(t *testing.T) {
 	// Test the Ruby-style filtering logic
 	tests := []struct {
-		name           string
-		labels         []int
-		expectedCount  int
+		name            string
+		labels          []int
+		expectedCount   int
 		expectedIndices []int
 	}{
 		{
-			name:           "all outliers",
-			labels:         []int{-1, -1, -1},
-			expectedCount:  3,
+			name:            "all outliers",
+			labels:          []int{-1, -1, -1},
+			expectedCount:   3,
 			expectedIndices: []int{0, 1, 2},
 		},
 		{
-			name:           "single cluster",
-			labels:         []int{0, 0, 0},
-			expectedCount:  1,
+			name:            "single cluster",
+			labels:          []int{0, 0, 0},
+			expectedCount:   1,
 			expectedIndices: []int{0},
 		},
 		{
-			name:           "two clusters",
-			labels:         []int{0, 0, 1, 1},
-			expectedCount:  2,
+			name:            "two clusters",
+			labels:          []int{0, 0, 1, 1},
+			expectedCount:   2,
 			expectedIndices: []int{0, 2},
 		},
 		{
-			name:           "mixed outliers and clusters",
-			labels:         []int{-1, 0, 0, -1, 1, 1},
-			expectedCount:  4,
+			name:            "mixed outliers and clusters",
+			labels:          []int{-1, 0, 0, -1, 1, 1},
+			expectedCount:   4,
 			expectedIndices: []int{0, 1, 3, 4},
 		},
 	}
@@ -144,4 +144,3 @@ func TestFilterPointsLogic(t *testing.T) {
 		})
 	}
 }
-
