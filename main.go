@@ -57,10 +57,10 @@ func main() {
 	// Build labels array from clusters and noise for filtering
 	labels := buildLabels(clusters, noise, len(points))
 
-	// Filter points based on Ruby logic:
+	// Filter points based on:
 	// 1. Keep outliers (label == -1)
 	// 2. Keep first point in each cluster (idx == 0 or label != labels[idx-1])
-	filteredIndices := filterPoints(labels)
+	filteredIndices := filterPoints(points, labels)
 
 	if *debug {
 		fmt.Printf("Filtered to %d points\n", len(filteredIndices))
@@ -154,25 +154,37 @@ func readPointsAndCSV(filename string) (cluster.PointList, [][]string, error) {
 // filterPoints filters points based on the Ruby logic:
 // - Keep outliers (label == -1)
 // - Keep first point in each cluster (idx == 0 or label != labels[idx-1])
-func filterPoints(labels []int) []int {
+// Tracks added points by their coordinates (lat, lon) to avoid duplicates
+func filterPoints(points cluster.PointList, labels []int) []int {
 	filtered := []int{}
+	added := make(map[cluster.Point]struct{}) // Set to track already added points by coordinates
 
 	for idx, label := range labels {
+		point := points[idx]
+
+		// Skip if point with same coordinates already added
+		if _, exists := added[point]; exists {
+			continue
+		}
+
 		// Keep if it's an outlier
 		if label == DbscanOutlierIndex {
 			filtered = append(filtered, idx)
+			added[point] = struct{}{}
 			continue
 		}
 
 		// Keep if it's the first point (idx == 0)
 		if idx == 0 {
 			filtered = append(filtered, idx)
+			added[point] = struct{}{}
 			continue
 		}
 
 		// Keep if it's the first point in a cluster (label != previous label)
 		if label != labels[idx-1] {
 			filtered = append(filtered, idx)
+			added[point] = struct{}{}
 		}
 	}
 
