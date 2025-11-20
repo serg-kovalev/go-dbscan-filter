@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+require 'bundler/gem_tasks'
+
+desc 'Build the gem'
+task :build do
+  system 'gem build go_dbscan_filter_binary.gemspec'
+end
+
+desc 'Install the gem locally'
+task :install do
+  system 'gem install ./go_dbscan_filter_binary-*.gem'
+end
+
+desc 'Download the binary (run this if binary is missing after bundle install)'
+task :download_binary do
+  puts 'Downloading go_dbscan_filter binary...'
+  load 'ext/go_dbscan_filter_binary/extconf.rb'
+  puts 'Binary downloaded successfully!'
+end
+
+desc 'Run tests'
+task :test do
+  # Add tests here if needed
+  puts 'No tests defined yet'
+end
+
+task :default => :build
+
