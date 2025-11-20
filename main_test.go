@@ -44,7 +44,7 @@ func TestMainProgram(t *testing.T) {
 
 	// Build labels and test filtering
 	labels := buildLabels(clusters, noise, len(points))
-	filteredIndices := filterPoints(labels)
+	filteredIndices := filterPoints(points, labels)
 
 	// Verify filtering logic:
 	// 1. All outliers should be included
@@ -132,7 +132,14 @@ func TestFilterPointsLogic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := filterPoints(tt.labels)
+			// Create mock points matching the labels length
+			points := make(cluster.PointList, len(tt.labels))
+			for i := range points {
+				// Use different coordinates for each point to avoid coordinate-based deduplication
+				// (except when we want to test coordinate deduplication)
+				points[i] = cluster.Point{float64(i), float64(i)}
+			}
+			result := filterPoints(points, tt.labels)
 			if len(result) != tt.expectedCount {
 				t.Errorf("Expected %d filtered points, got %d", tt.expectedCount, len(result))
 			}
