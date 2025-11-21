@@ -1,0 +1,13 @@
+# Clippy configuration for modern Rust best practices
+
+# Performance
+avoid-breaking-exported-api = false
+
+# Correctness
+disallowed-types = []
+disallowed-methods = []
+
+# Complexity
+# Allow some complexity for algorithm implementations
+too-many-arguments-threshold = 6
+

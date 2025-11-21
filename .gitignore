@@ -44,3 +44,5 @@ dist/
 *.deb
 *.rpm
 
+# Rust (rust_dbscan has its own .gitignore)
+
