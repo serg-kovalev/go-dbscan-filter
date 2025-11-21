@@ -31,3 +31,139 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  rust_release:
+    name: Rust Release
+    needs: goreleaser
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: rust_dbscan
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            os: linux
+            arch: amd64
+            binary: rust_dbscan_filter
+            archive-name: rust-dbscan-filter_linux_amd64
+            format: tar.gz
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            os: darwin
+            arch: amd64
+            binary: rust_dbscan_filter
+            archive-name: rust-dbscan-filter_darwin_amd64
+            format: tar.gz
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            os: darwin
+            arch: arm64
+            binary: rust_dbscan_filter
+            archive-name: rust-dbscan-filter_darwin_arm64
+            format: tar.gz
+          - runner: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            os: windows
+            arch: amd64
+            binary: rust_dbscan_filter.exe
+            archive-name: rust-dbscan-filter_windows_amd64
+            format: zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation dependencies
+        if: runner.os == 'Linux' && matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Build Rust binary
+        run: |
+          if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
+            export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare binary for archive
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
+          if [[ "${{ matrix.format }}" == "tar.gz" ]]; then
+            chmod +x dist/${{ matrix.binary }}
+          fi
+
+      - name: Create archive
+        run: |
+          cd dist
+          if [[ "${{ matrix.format }}" == "tar.gz" ]]; then
+            tar -czf ../${{ matrix.archive-name }}.tar.gz ${{ matrix.binary }}
+          else
+            zip ../${{ matrix.archive-name }}.zip ${{ matrix.binary }}
+          fi
+          cd ..
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            sha256sum ${{ matrix.archive-name }}.${{ matrix.format }} > ${{ matrix.archive-name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.archive-name }}.${{ matrix.format }} > ${{ matrix.archive-name }}.sha256
+          fi
+          # List files to verify they exist
+          ls -la ${{ matrix.archive-name }}.* || echo "Files not found in current directory"
+          pwd
+
+      - name: Upload Rust artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive-name }}
+          path: |
+            rust_dbscan/${{ matrix.archive-name }}.${{ matrix.format }}
+            rust_dbscan/${{ matrix.archive-name }}.sha256
+          if-no-files-found: error
+
+  rust_release_upload:
+    name: Upload Rust Release
+    needs: [goreleaser, rust_release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all Rust artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rust-dbscan-filter_*
+          merge-multiple: false
+          path: artifacts
+
+      - name: Get tag name
+        id: tag
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release_files
+          # Move all tar.gz and zip files to release_files directory
+          find artifacts -name "*.tar.gz" -exec cp {} release_files/ \;
+          find artifacts -name "*.zip" -exec cp {} release_files/ \;
+          # Combine all sha256 files into one checksums file
+          find artifacts -name "*.sha256" -exec cat {} \; > release_files/rust-dbscan-filter_checksums.txt || true
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release_files/*
+          tag_name: ${{ steps.tag.outputs.TAG_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

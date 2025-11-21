@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Rust binaries
+rust_dbscan_filter
+rust_dbscan_filter.exe
+rust_dbscan
+rust_dbscan.exe
+
+# Build artifacts from release workflow
+dist/
+*.sha256
+
+# Cargo.lock should be committed for binaries, but uncomment if you want to ignore it
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.pdb
+

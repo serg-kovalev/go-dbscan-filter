@@ -1,0 +1,21 @@
+[package]
+name = "rust_dbscan"
+version = "0.1.4"
+edition = "2024"
+authors = ["Sergey Kovalev"]
+description = "DBSCAN geo point clustering tool - Rust port"
+license = "MIT"
+rust-version = "1.91"
+
+[[bin]]
+name = "rust_dbscan_filter"
+path = "src/main.rs"
+
+[dependencies]
+csv = "1.3"
+bitvec = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+
+[dev-dependencies]
+quickcheck = "1.0"
+

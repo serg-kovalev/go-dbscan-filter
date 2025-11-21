@@ -6,6 +6,8 @@
 *.dylib
 go_dbscan_filter
 go_dbscan_filter.exe
+rust_dbscan_filter
+rust_dbscan_filter.exe
 .tool-versions
 
 # Test binary, built with `go test -c`
@@ -43,4 +45,6 @@ dist/
 *.tar.gz
 *.deb
 *.rpm
+
+# Rust (rust_dbscan has its own .gitignore)
 
